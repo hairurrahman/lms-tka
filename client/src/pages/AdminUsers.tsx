@@ -15,7 +15,7 @@ import {
   importContentBackup,
   type ContentBackup,
 } from '@/services/dataStore';
-import { getSavedFirebaseConfig, setFirebaseConfigAndReload, clearFirebaseConfigAndReload, type FirebaseProjectConfig } from '@/lib/firebase';
+import { getSavedFirebaseConfig, getActiveFirebaseConfig, setFirebaseConfigAndReload, clearFirebaseConfigAndReload, IS_FIREBASE_CONFIG_LOCKED_BY_ENV, type FirebaseProjectConfig } from '@/lib/firebase';
 import type { AppUser, Kelas, SchoolSettings } from '@/lib/mockData';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,7 +61,8 @@ export function AdminUsersPage() {
   const [savingSchool, setSavingSchool] = useState(false);
 
   // ---------- Firebase (ganti project) ----------
-  const currentFirebaseConfig = getSavedFirebaseConfig();
+  const currentFirebaseConfig = getActiveFirebaseConfig(); // for display (env or localStorage)
+  const localOnlyConfig = getSavedFirebaseConfig(); // localStorage only — used to decide if "Disconnect" applies
   const [firebaseConfigText, setFirebaseConfigText] = useState('');
   const [savingFirebase, setSavingFirebase] = useState(false);
 
@@ -649,43 +650,75 @@ export function AdminUsersPage() {
               <div className="flex items-center gap-2 font-bold">
                 <Flame className="h-5 w-5 text-primary" /> Project Firebase
               </div>
-              <p className="text-sm text-muted-foreground">
-                Aplikasi ini bisa dipakai banyak sekolah dari 1 build yang sama — tiap sekolah tinggal
-                menyambungkan project Firebase miliknya sendiri di sini. Mengganti project berarti
-                aplikasi pindah ke database yang sama sekali berbeda (akun & data sekolah saat ini
-                tidak ikut pindah — gunakan tab Backup untuk memindahkan Mapel/Materi/Soal).
-              </p>
+              {IS_FIREBASE_CONFIG_LOCKED_BY_ENV ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Project Firebase untuk deployment ini sudah dikunci lewat pengaturan hosting
+                    (Environment Variable <code className="font-mono text-xs">VITE_FIREBASE_CONFIG</code>),
+                    bukan lewat halaman ini. Ini cara yang tepat untuk pemakaian banyak sekolah: 1 folder
+                    proyek + 1 Environment Variable per sekolah = setiap pengunjung (siswa, guru, admin,
+                    dari device manapun) otomatis tersambung ke project yang benar, tanpa perlu diatur
+                    manual per-browser.
+                  </p>
+                  {currentFirebaseConfig && (
+                    <div className="rounded-2xl bg-muted/50 border border-border p-3 text-sm">
+                      <div className="font-bold">Tersambung ke:</div>
+                      <div className="font-mono text-xs mt-1">{currentFirebaseConfig.projectId}</div>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 border border-border rounded-xl p-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>
+                      Untuk sekolah baru: duplikat folder proyek ini, buat project Cloudflare Pages baru,
+                      lalu isi Environment Variable <code className="font-mono">VITE_FIREBASE_CONFIG</code> dengan
+                      config Firebase sekolah itu (format JSON satu baris), baru deploy.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Belum ada project Firebase permanen untuk deployment ini (masih mode demo, atau
+                    tersambung sementara lewat browser ini saja). Untuk pemakaian sungguhan oleh banyak
+                    orang (siswa & guru dari device masing-masing), sebaiknya atur lewat Environment
+                    Variable <code className="font-mono text-xs">VITE_FIREBASE_CONFIG</code> di pengaturan
+                    hosting (lihat kotak di bawah) — bukan lewat form ini, karena form ini hanya
+                    tersimpan di browser Anda sendiri, tidak ikut ke pengunjung lain.
+                  </p>
 
-              {currentFirebaseConfig && (
-                <div className="rounded-2xl bg-muted/50 border border-border p-3 text-sm">
-                  <div className="font-bold">Tersambung ke:</div>
-                  <div className="font-mono text-xs mt-1">{currentFirebaseConfig.projectId}</div>
-                </div>
+                  {currentFirebaseConfig && (
+                    <div className="rounded-2xl bg-muted/50 border border-border p-3 text-sm">
+                      <div className="font-bold">Tersambung ke (hanya di browser ini):</div>
+                      <div className="font-mono text-xs mt-1">{currentFirebaseConfig.projectId}</div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tempel config Firebase (dari Firebase Console → Project Settings)</Label>
+                    <Textarea
+                      value={firebaseConfigText}
+                      onChange={(e) => setFirebaseConfigText(e.target.value)}
+                      placeholder={'const firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  projectId: "...",\n  ...\n};'}
+                      className="font-mono text-xs min-h-[160px]"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Tempel apa adanya (boleh bentuk kode seperti di atas atau JSON) — cukup ada apiKey, projectId, dan appId.
+                      Cocok untuk testing cepat; untuk sekolah sungguhan pakai Environment Variable seperti dijelaskan di atas.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={handleSaveFirebaseConfig} disabled={savingFirebase || !firebaseConfigText.trim()} className="font-bold">
+                      <Flame className="h-4 w-4 mr-1" /> Sambungkan (browser ini saja)
+                    </Button>
+                    {localOnlyConfig && (
+                      <Button variant="outline" onClick={handleDisconnectFirebase} className="text-destructive hover:bg-destructive/10">
+                        Putuskan & Kembali ke Mode Demo
+                      </Button>
+                    )}
+                  </div>
+                </>
               )}
-
-              <div className="space-y-1">
-                <Label className="text-xs">Tempel config Firebase (dari Firebase Console → Project Settings)</Label>
-                <Textarea
-                  value={firebaseConfigText}
-                  onChange={(e) => setFirebaseConfigText(e.target.value)}
-                  placeholder={'const firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  projectId: "...",\n  ...\n};'}
-                  className="font-mono text-xs min-h-[160px]"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Tempel apa adanya (boleh bentuk kode seperti di atas atau JSON) — cukup ada apiKey, projectId, dan appId.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={handleSaveFirebaseConfig} disabled={savingFirebase || !firebaseConfigText.trim()} className="font-bold">
-                  <Flame className="h-4 w-4 mr-1" /> Sambungkan Project Ini
-                </Button>
-                {currentFirebaseConfig && (
-                  <Button variant="outline" onClick={handleDisconnectFirebase} className="text-destructive hover:bg-destructive/10">
-                    Putuskan & Kembali ke Mode Demo
-                  </Button>
-                )}
-              </div>
 
               <div className="flex items-start gap-2 text-xs text-muted-foreground bg-warning/10 border border-warning/30 rounded-xl p-3">
                 <AlertTriangle className="h-4 w-4 text-warning-foreground shrink-0 mt-0.5" />

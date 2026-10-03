@@ -1,0 +1,14 @@
+{
+  // Ganti "name" ini jadi unik per sekolah kalau Cloudflare tidak otomatis
+  // menimpanya (biasanya Cloudflare Workers Builds otomatis mencocokkan
+  // nama ini dengan nama project yang Anda buat di dashboard).
+  "name": "lms-tka",
+  "compatibility_date": "2026-01-01",
+  "assets": {
+    // Folder hasil build (lihat vite.config.ts -> build.outDir)
+    "directory": "./dist/public",
+    // Wajib untuk Single Page App: route yang tidak match file statis
+    // (misal /admin/pengguna) tetap diarahkan ke index.html, bukan 404.
+    "not_found_handling": "single-page-application"
+  }
+}
